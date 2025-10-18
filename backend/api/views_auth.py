@@ -1,5 +1,7 @@
 """Auth-related views: login, signup, password, tokens, Google, email verify."""
-
+from rest_framework.decorators import api_view
+from rest_framework.response import Response
+from rest_framework import status
 import json
 import uuid
 import os
@@ -13,7 +15,7 @@ from django.contrib.auth.hashers import check_password
 import jwt
 import secrets
 import requests as _requests
-
+from django.contrib.auth import authenticate
 from .views_common import (
     rate_limit,
     _login_rate_key,
@@ -116,7 +118,71 @@ def health_db(request):
 
 @rate_limit(limit=7, window_seconds=60, key_fn=_login_rate_key)
 @require_http_methods(["POST"]) 
+
 def auth_login(request):
+    """
+    Clean login endpoint for AppUser.
+    Expects JSON body: { "email": "...", "password": "...", "remember": true/false (optional) }
+    Returns: { success: True/False, message: "...", email: "...", role: "..." }
+    """
+    # --------------------
+    # Parse request body safely
+    # --------------------
+    try:
+        raw_body = request.body.decode("utf-8") if request.body else "{}"
+        data = json.loads(raw_body)
+    except (json.JSONDecodeError, UnicodeDecodeError):
+        data = {}
+
+    email = (data.get("email") or "").lower().strip()
+    password = data.get("password") or ""
+
+    # --------------------
+    # Basic input validation
+    # --------------------
+    if not email or not password:
+        return JsonResponse({"success": False, "message": "Email and password are required"}, status=400)
+
+    # --------------------
+    # Look up user by email
+    # --------------------
+    try:
+        user = AppUser.objects.get(email=email)
+    except AppUser.DoesNotExist:
+        return JsonResponse({"success": False, "message": "Invalid credentials"}, status=401)
+
+    # --------------------
+    # Verify password
+    # --------------------
+    if not user.check_password(password):
+        return JsonResponse({"success": False, "message": "Invalid credentials"}, status=401)
+
+    # --------------------
+    # Optional "remember me" logic (JWT expiration)
+    # --------------------
+    remember_raw = data.get("remember")
+    remember = False
+    if isinstance(remember_raw, bool):
+        remember = remember_raw
+    elif isinstance(remember_raw, (int, str)):
+        remember = str(remember_raw).lower() in {"1", "true", "yes", "on"}
+
+    exp_seconds = (
+        getattr(settings, "JWT_REMEMBER_EXP_SECONDS", 30 * 24 * 60 * 60)
+        if remember
+        else getattr(settings, "JWT_EXP_SECONDS", 3600)
+    )
+
+    # --------------------
+    # Return success response
+    # --------------------
+    return JsonResponse({
+        "success": True,
+        "message": "Login successful",
+        "email": user.email,
+        "role": getattr(user, "role", None),
+    })
+
     try:
         data = json.loads(request.body.decode("utf-8") or "{}")
     except Exception:

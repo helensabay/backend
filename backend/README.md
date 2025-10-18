@@ -96,3 +96,4 @@ You can quickly create or update an admin via a management command:
     python manage.py bootstrap_admin --email your-email@example.com --password "your-strong-pass" --name "Admin"
 
 This will set role=admin and permissions=["all"]. Re-running updates the password/name.
+"# backend-web" 

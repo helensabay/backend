@@ -3,12 +3,23 @@ from uuid import uuid4
 from decimal import Decimal
 from django.db import models
 from django.utils import timezone
+from django.contrib.auth.models import AbstractBaseUser, BaseUserManager
+from django.contrib.auth.hashers import make_password, check_password
 
 try:
     from .storage import PrivateMediaStorage
 except Exception:  # fallback if storage cannot be imported during migrations
     PrivateMediaStorage = None
 
+class AppUserManager(BaseUserManager):
+    def create_user(self, email, password=None, **extra_fields):
+        if not email:
+            raise ValueError("Email is required")
+        email = self.normalize_email(email)
+        user = self.model(email=email, **extra_fields)
+        user.set_password(password)
+        user.save(using=self._db)
+        return user
 
 class AppUser(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid4, editable=False)
@@ -32,12 +43,22 @@ class AppUser(models.Model):
         return f"{self.email} ({self.role})"
 
 
+    # 🔒 Password helpers
+    def set_password(self, raw_password):
+        """Hashes and stores the password securely."""
+        self.password_hash = make_password(raw_password)
+        self.save(update_fields=["password_hash"])
+
+    def check_password(self, raw_password):
+        """Checks if a password matches the stored hash."""
+        return check_password(raw_password, self.password_hash)
+
+
 def _headshot_upload_path(instance, filename):
-    # Store under a per-user folder with a random filename; keep extension if present
+    """Stores uploaded headshots under access_requests/<user_id>/"""
     base, ext = os.path.splitext(filename or "")
     ext = ext if ext else ".bin"
     return f"access_requests/{instance.user_id}/{uuid4().hex}{ext}"
-
 
 class AccessRequest(models.Model):
     STATUS_PENDING = "pending"

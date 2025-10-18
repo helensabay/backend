@@ -9,4 +9,3 @@ from .views_verify import *  # noqa: F401,F403
 from .views_menu import *  # noqa: F401,F403
 from .views_users import *  # noqa: F401,F403
 from .views_common import *  # noqa: F401,F403
-

@@ -19,9 +19,12 @@ if load_dotenv:
 DEBUG = os.getenv("DJANGO_DEBUG", "1") in {"1", "true", "True"}
 SECRET_KEY = os.getenv("DJANGO_SECRET_KEY", "dev-insecure-secret-key")
 ALLOWED_HOSTS = os.getenv("DJANGO_ALLOWED_HOSTS", "*").split(",")
+AUTH_USER_MODEL = 'accounts.AppUser'
+
 
 # Minimal apps to avoid DB usage
 INSTALLED_APPS = [
+
     # Django core
     "django.contrib.admin",
     "django.contrib.auth",
@@ -30,7 +33,7 @@ INSTALLED_APPS = [
     "django.contrib.messages",
     "django.contrib.staticfiles",
     "django.contrib.sites",
-
+    "rest_framework",  # if you're using Django REST
     # Third-party
     "corsheaders",
     "allauth",
@@ -39,12 +42,15 @@ INSTALLED_APPS = [
     "allauth.socialaccount.providers.google",
 
     # Local apps
-    "api",
     "accounts",
+    "api",
+    
 ]
 
 # Keep middleware lightweight; omit session/auth/csrf
 MIDDLEWARE = [
+     "corsheaders.middleware.CorsMiddleware",  # add this line near the top
+    "django.middleware.common.CommonMiddleware",
     "django.middleware.security.SecurityMiddleware",
     "api.middleware.SecurityHeadersMiddleware",
     "corsheaders.middleware.CorsMiddleware",

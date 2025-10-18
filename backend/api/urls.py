@@ -24,6 +24,9 @@ from . import (
 
 urlpatterns = [
     # Health checks
+
+    path('api/', include('accounts.urls')),
+
     path("health/", auth_views.health, name="health"),
     path("health/db", auth_views.health_db, name="health_db"),
 

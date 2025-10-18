@@ -5,6 +5,8 @@ from django.conf import settings
 from django.conf.urls.static import static
 
 urlpatterns = [
+
+     
     # Redirect the root path to a simple health endpoint to avoid 404s
     path("", RedirectView.as_view(url="/api/health/", permanent=False), name="root"),
     path("admin/", admin.site.urls),
