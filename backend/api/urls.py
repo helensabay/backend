@@ -1,5 +1,6 @@
 from django.urls import path, include
 from . import (
+
     views_auth as auth_views,
     views_password_reset as pr_views,
     views_verify as verify_views,
@@ -20,17 +21,27 @@ from . import (
     views_analytics as analytics_views,
     views_catering as catering_views,
     views_dashboard as dashboard_views,
+
 )
+from django.urls import path
+from .views_auth import auth_login
+from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
+from api.views_attendance import MyTokenObtainPairView
 
 urlpatterns = [
     # Health checks
+        path('login/', MyTokenObtainPairView.as_view(), name='token_obtain_pair'),
 
-    path('api/', include('accounts.urls')),
-
+    path('login/', auth_login, name='login'),
+    path('api/', include('accounts.urls')),  # login endpoint will be /api/login/
+    path('', include('accounts.urls')),
+    path('api/login/', TokenObtainPairView.as_view(), name='token_obtain_pair'),
+    path('api/token/refresh/', TokenRefreshView.as_view(), name='token_refresh'),
     path("health/", auth_views.health, name="health"),
     path("health/db", auth_views.health_db, name="health_db"),
 
     # Authentication
+    
     path("auth/login", auth_views.auth_login, name="auth_login"),
     path("auth/login/resend-otp", auth_views.auth_login_resend_otp, name="auth_login_resend_otp"),
     path("auth/login/verify-otp", auth_views.auth_login_verify_otp, name="auth_login_verify_otp"),

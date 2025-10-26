@@ -13,7 +13,11 @@ from django.db import transaction
 from django.utils import timezone as dj_tz
 
 from .views_common import _actor_from_request, _has_permission
+from rest_framework_simplejwt.views import TokenObtainPairView
+from accounts.serializers import MyTokenObtainPairSerializer
 
+class MyTokenObtainPairView(TokenObtainPairView):
+    serializer_class = MyTokenObtainPairSerializer
 
 def _parse_date(val):
     try:

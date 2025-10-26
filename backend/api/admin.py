@@ -4,7 +4,7 @@ from django.urls import path, reverse
 from django.http import FileResponse, Http404, HttpResponseForbidden
 from django import forms
 
-from .models import AppUser, AccessRequest, MenuItem
+from .models import AppUser, AccessRequest
 from .emails import (
     email_user_approved,
     email_user_rejected,
@@ -16,6 +16,7 @@ APPROVE_ROLE_CHOICES = (
     ("manager", "Manager"),
     ("admin", "Admin"),
 )
+
 
 
 class ApproveActionForm(forms.Form):
@@ -156,9 +157,3 @@ class AccessRequestAdmin(admin.ModelAdmin):
         self.message_user(request, f"Rejected {count} request(s).", messages.WARNING)
 
 
-@admin.register(MenuItem)
-class MenuItemAdmin(admin.ModelAdmin):
-    list_display = ("name", "category", "price", "available", "updated_at")
-    list_filter = ("available", "category")
-    search_fields = ("name", "description", "category")
-    ordering = ("name",)

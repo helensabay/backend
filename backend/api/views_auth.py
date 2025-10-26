@@ -3,6 +3,9 @@ from rest_framework.decorators import api_view
 from rest_framework.response import Response
 from rest_framework import status
 import json
+from django.views.decorators.csrf import csrf_exempt
+from rest_framework_simplejwt.tokens import RefreshToken
+
 import uuid
 import os
 from django.http import JsonResponse
@@ -118,346 +121,32 @@ def health_db(request):
 
 @rate_limit(limit=7, window_seconds=60, key_fn=_login_rate_key)
 @require_http_methods(["POST"]) 
-
+@csrf_exempt
+# api/views_auth.py
+@api_view(['POST'])
 def auth_login(request):
-    """
-    Clean login endpoint for AppUser.
-    Expects JSON body: { "email": "...", "password": "...", "remember": true/false (optional) }
-    Returns: { success: True/False, message: "...", email: "...", role: "..." }
-    """
-    # --------------------
-    # Parse request body safely
-    # --------------------
-    try:
-        raw_body = request.body.decode("utf-8") if request.body else "{}"
-        data = json.loads(raw_body)
-    except (json.JSONDecodeError, UnicodeDecodeError):
-        data = {}
-
-    email = (data.get("email") or "").lower().strip()
-    password = data.get("password") or ""
-
-    # --------------------
-    # Basic input validation
-    # --------------------
-    if not email or not password:
-        return JsonResponse({"success": False, "message": "Email and password are required"}, status=400)
-
-    # --------------------
-    # Look up user by email
-    # --------------------
-    try:
-        user = AppUser.objects.get(email=email)
-    except AppUser.DoesNotExist:
-        return JsonResponse({"success": False, "message": "Invalid credentials"}, status=401)
-
-    # --------------------
-    # Verify password
-    # --------------------
-    if not user.check_password(password):
-        return JsonResponse({"success": False, "message": "Invalid credentials"}, status=401)
-
-    # --------------------
-    # Optional "remember me" logic (JWT expiration)
-    # --------------------
-    remember_raw = data.get("remember")
-    remember = False
-    if isinstance(remember_raw, bool):
-        remember = remember_raw
-    elif isinstance(remember_raw, (int, str)):
-        remember = str(remember_raw).lower() in {"1", "true", "yes", "on"}
-
-    exp_seconds = (
-        getattr(settings, "JWT_REMEMBER_EXP_SECONDS", 30 * 24 * 60 * 60)
-        if remember
-        else getattr(settings, "JWT_EXP_SECONDS", 3600)
-    )
-
-    # --------------------
-    # Return success response
-    # --------------------
-    return JsonResponse({
-        "success": True,
-        "message": "Login successful",
-        "email": user.email,
-        "role": getattr(user, "role", None),
-    })
+    if request.method != "POST":
+        return JsonResponse({"success": False, "message": "Only POST allowed"}, status=405)
 
     try:
-        data = json.loads(request.body.decode("utf-8") or "{}")
+        data = json.loads(request.body)
+        email = data.get("email")
+        password = data.get("password")
     except Exception:
-        data = {}
-    email = (data.get("email") or "").lower().strip()
-    password = data.get("password") or ""
-    remember_raw = data.get("remember")
-    remember = False
-    if isinstance(remember_raw, bool):
-        remember = remember_raw
-    elif isinstance(remember_raw, (int, str)):
-        remember = str(remember_raw).lower() in {"1", "true", "yes", "on"}
-    exp_seconds = getattr(settings, "JWT_REMEMBER_EXP_SECONDS", 30 * 24 * 60 * 60) if remember else getattr(settings, "JWT_EXP_SECONDS", 3600)
+        return JsonResponse({"success": False, "message": "Invalid JSON"}, status=400)
 
-    # Lockout pre-check
-    from .views_common import _client_ip
-    ip = _client_ip(request)
-    locked, retry_after = _is_locked(email, ip)
-    if locked:
-        try:
-            record_audit(
-                request,
-                actor_email=email,
-                type="security",
-                action="Login rate limited",
-                details=f"email={email}",
-                severity="warning",
-                meta={"reason": "lockout", "retryAfter": int(retry_after)},
-            )
-        except Exception:
-            pass
-        resp = JsonResponse({"success": False, "message": "Too many attempts. Try again later."})
-        resp.status_code = 423
-        resp["Retry-After"] = str(max(1, int(retry_after)))
-        return resp
+    # Authenticate using username/email
+    user = authenticate(username=email, password=password)
 
-    # Basic input presence check (avoid unnecessary DB hits)
-    if not email or not password:
-        # Record failed attempt and respond uniformly
-        locked, retry_after = _lockout_check_and_touch(email, ip, success=False)
-        if locked:
-            resp = JsonResponse({"success": False, "message": "Too many attempts. Try again later."})
-            resp.status_code = 423
-            resp["Retry-After"] = str(max(1, int(retry_after)))
-            return resp
-        try:
-            record_audit(
-                request,
-                actor_email=email,
-                type="login",
-                action="Login failed",
-                details="Invalid credentials (missing email/password)",
-                severity="warning",
-            )
-        except Exception:
-            pass
+    if user is not None and user.is_active:
+        return JsonResponse({
+            "success": True,
+            "email": user.email,
+            
+            "message": "Login successful"
+        })
+    else:
         return JsonResponse({"success": False, "message": "Invalid credentials"}, status=401)
-
-    # Try DB first
-    user_exists = False
-    try:
-        from .models import AppUser
-        _maybe_seed_from_memory()
-        db_user = AppUser.objects.filter(email=email).first()
-        if db_user:
-            user_exists = True
-        if db_user and db_user.password_hash and password and check_password(password, db_user.password_hash):
-            status_l = (db_user.status or "").lower()
-            safe_user = _safe_user_from_db(db_user)
-            # Block deactivated accounts
-            if status_l == "deactivated":
-                try:
-                    record_audit(
-                        request,
-                        user=db_user,
-                        type="security",
-                        action="Login blocked (deactivated)",
-                        details="Password login",
-                        severity="warning",
-                    )
-                except Exception:
-                    pass
-                return JsonResponse(
-                    {
-                        "success": False,
-                        "message": "Your account is currently deactivated, to activate please contact the admin.",
-                    },
-                    status=403,
-                )
-            # Pending or other non-active states: return pending without issuing tokens
-            if status_l != "active":
-                try:
-                    vtok = _issue_verify_token_from_db(db_user)
-                except Exception:
-                    vtok = None
-                _lockout_check_and_touch(email, ip, success=True)
-                try:
-                    record_audit(
-                        request,
-                        user=db_user,
-                        type="login",
-                        action="Login pending",
-                        details="Password login",
-                        severity="info",
-                    )
-                except Exception:
-                    pass
-                return JsonResponse({
-                    "success": True,
-                    "pending": True,
-                    "user": safe_user,
-                    **({"verifyToken": vtok} if vtok else {}),
-                })
-
-            # Active: require OTP verification before issuing tokens
-            try:
-                code, otp = create_login_otp(
-                    db_user,
-                    remember=remember,
-                    ip_address=ip or "",
-                    user_agent=request.META.get("HTTP_USER_AGENT", "") or "",
-                )
-            except Exception:
-                return JsonResponse(
-                    {
-                        "success": False,
-                        "message": "Could not initiate verification. Please try again.",
-                    },
-                    status=500,
-                )
-
-            ttl_seconds = get_login_otp_ttl_seconds()
-            try:
-                email_user_login_otp(db_user, code, expires_minutes=max(1, int(ttl_seconds / 60)))
-            except Exception:
-                pass
-
-            _lockout_check_and_touch(email, ip, success=True)
-            try:
-                record_audit(
-                    request,
-                    user=db_user,
-                    type="login",
-                    action="Login OTP sent",
-                    details="Password login",
-                    severity="info",
-                    meta={"otpId": str(otp.id)},
-                )
-            except Exception:
-                pass
-
-            return JsonResponse(
-                {
-                    "success": True,
-                    "otpRequired": True,
-                    "otpToken": str(otp.id),
-                    "expiresIn": ttl_seconds,
-                    "user": safe_user,
-                }
-            )
-    except (OperationalError, ProgrammingError):
-        pass
-
-    # Fallback to in-memory (disabled when DISABLE_INMEM_FALLBACK is true)
-    if getattr(settings, "DISABLE_INMEM_FALLBACK", False):
-        return JsonResponse(
-            {
-                "success": False,
-                "message": "Service temporarily unavailable. Please try again later.",
-            },
-            status=503,
-        )
-
-    user = next((u for u in USERS if (u.get("email") or "").lower() == email), None)
-    if user:
-        user_exists = True
-    if user and password and secrets.compare_digest(str(password), str(user.get("password") or "")):
-        status_l = (user.get("status") or "").lower()
-        safe_user = {k: v for k, v in user.items() if k != "password"}
-        # Block deactivated accounts
-        if status_l == "deactivated":
-            try:
-                record_audit(
-                    request,
-                    actor_email=email,
-                    type="security",
-                    action="Login blocked (deactivated)",
-                    details="Password login",
-                    severity="warning",
-                )
-            except Exception:
-                pass
-            return JsonResponse(
-                {
-                    "success": False,
-                    "message": "Your account is currently deactivated, to activate please contact the admin.",
-                },
-                status=403,
-            )
-        # Pending or other non-active states: return pending without tokens
-        if status_l != "active":
-            _lockout_check_and_touch(email, ip, success=True)
-            try:
-                record_audit(
-                    request,
-                    actor_email=email,
-                    type="login",
-                    action="Login pending",
-                    details="Password login (mem)",
-                    severity="info",
-                )
-            except Exception:
-                pass
-            try:
-                vtok = _issue_verify_token_from_dict(safe_user)
-            except Exception:
-                vtok = None
-            return JsonResponse({
-                "success": True,
-                "pending": True,
-                "user": safe_user,
-                **({"verifyToken": vtok} if vtok else {}),
-            })
-
-        rtoken = _issue_refresh_token_mem(safe_user, remember=remember, request=request)
-        _lockout_check_and_touch(email, ip, success=True)
-        payload = {"success": True, "user": safe_user, "token": _issue_jwt_from_dict(safe_user, exp_seconds=exp_seconds), "refreshToken": rtoken}
-        try:
-            record_audit(
-                request,
-                actor_email=email,
-                type="login",
-                action="Login success",
-                details="Password login (mem)",
-                severity="info",
-            )
-        except Exception:
-            pass
-        return JsonResponse(payload)
-
-    # Record failed attempt and maybe lock
-    locked, retry_after = _lockout_check_and_touch(email, ip, success=False)
-    if locked:
-        try:
-            record_audit(
-                request,
-                actor_email=email,
-                type="security",
-                action="Login rate limited",
-                details=f"email={email}",
-                severity="warning",
-                meta={"reason": "lockout", "retryAfter": int(retry_after)},
-            )
-        except Exception:
-            pass
-        resp = JsonResponse({"success": False, "message": "Too many attempts. Try again later."})
-        resp.status_code = 423
-        resp["Retry-After"] = str(max(1, int(retry_after)))
-        return resp
-    try:
-        record_audit(
-            request,
-            actor_email=email,
-            type="login",
-            action="Login failed",
-            details=("Account not found" if not user_exists else "Invalid credentials"),
-            severity="warning",
-        )
-    except Exception:
-        pass
-    if not user_exists:
-        return JsonResponse({"success": False, "message": "Account not found"}, status=404)
-    return JsonResponse({"success": False, "message": "Invalid credentials"}, status=401)
-
-
 @rate_limit(limit=10, window_seconds=60, key_fn=_login_rate_key)
 @require_http_methods(["POST"]) 
 
@@ -542,7 +231,40 @@ def auth_login_verify_otp(request):
         }
     )
 
+def login_view(request):
+    if request.method != "POST":
+        return JsonResponse({"success": False, "message": "Method not allowed"}, status=405)
 
+    try:
+        data = json.loads(request.body)
+        email = data.get("email")
+        password = data.get("password")
+
+        if not email or not password:
+            return JsonResponse({"success": False, "message": "Email and password required"}, status=400)
+
+        # Django default authentication uses 'username'; if using email as username:
+        user = authenticate(username=email, password=password)
+
+        if user is None:
+            return JsonResponse({"success": False, "message": "Invalid credentials"}, status=401)
+
+        if not user.is_active:
+            return JsonResponse({"success": False, "message": "User is inactive"}, status=403)
+
+        # Optional: include extra user info
+        user_data = {
+            "email": user.email,
+            "role": getattr(user, "role", None),  # assuming you have a 'role' field
+            "id": user.id,
+        }
+
+        return JsonResponse({"success": True, "message": "Login successful", **user_data})
+
+    except json.JSONDecodeError:
+        return JsonResponse({"success": False, "message": "Invalid JSON"}, status=400)
+    except Exception as e:
+        return JsonResponse({"success": False, "message": str(e)}, status=500)
 @rate_limit(limit=5, window_seconds=60, key_fn=_login_rate_key)
 @require_http_methods(["POST"]) 
 def auth_login_resend_otp(request):

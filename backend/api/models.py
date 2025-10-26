@@ -5,60 +5,84 @@ from django.db import models
 from django.utils import timezone
 from django.contrib.auth.models import AbstractBaseUser, BaseUserManager
 from django.contrib.auth.hashers import make_password, check_password
+from accounts.models import AppUser
+from django.contrib.auth.models import AbstractBaseUser, BaseUserManager, PermissionsMixin
+from django.contrib.auth.models import AbstractBaseUser, BaseUserManager, PermissionsMixin, Group, Permission
 
 try:
     from .storage import PrivateMediaStorage
 except Exception:  # fallback if storage cannot be imported during migrations
     PrivateMediaStorage = None
-
+from django.contrib.auth.models import AbstractBaseUser, BaseUserManager, PermissionsMixin, Group, Permission
+from uuid import uuid4
+from django.db import models
+# -------------------------
+# AppUser Manager
+# -------------------------
 class AppUserManager(BaseUserManager):
-    def create_user(self, email, password=None, **extra_fields):
+    def create_user(self, email, name, password=None, **extra_fields):
         if not email:
             raise ValueError("Email is required")
         email = self.normalize_email(email)
-        user = self.model(email=email, **extra_fields)
+        user = self.model(email=email, name=name, **extra_fields)
         user.set_password(password)
         user.save(using=self._db)
         return user
 
-class AppUser(models.Model):
+    def create_superuser(self, email, name, password=None, **extra_fields):
+        extra_fields.setdefault("is_staff", True)
+        extra_fields.setdefault("is_superuser", True)
+        return self.create_user(email, name, password, **extra_fields)
+
+# -------------------------
+# AppUser Model
+# -------------------------
+class AppUser(AbstractBaseUser, PermissionsMixin):
     id = models.UUIDField(primary_key=True, default=uuid4, editable=False)
     email = models.EmailField(unique=True)
     name = models.CharField(max_length=255)
     role = models.CharField(max_length=32, default="staff")
     status = models.CharField(max_length=32, default="active")
     permissions = models.JSONField(default=list, blank=True)
-    password_hash = models.CharField(max_length=128, blank=True)
     avatar = models.URLField(blank=True, null=True)
     phone = models.CharField(max_length=32, blank=True)
+    email_verified = models.BooleanField(default=False)
+    is_active = models.BooleanField(default=True)
+    is_staff = models.BooleanField(default=False)
+
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
-    last_login = models.DateTimeField(blank=True, null=True)
-    email_verified = models.BooleanField(default=False)
+
+    # Fix for E304 errors: custom related_name to avoid clashes
+    groups = models.ManyToManyField(
+        Group,
+        related_name="accounts_appuser_set",
+        blank=True,
+    )
+    user_permissions = models.ManyToManyField(
+        Permission,
+        related_name="accounts_appuser_set",
+        blank=True,
+    )
+
+    USERNAME_FIELD = "email"
+    REQUIRED_FIELDS = ["name"]
+
+    objects = AppUserManager()
+
+    def __str__(self):
+        return f"{self.email} ({self.role})"
 
     class Meta:
         db_table = "app_user"
 
-    def __str__(self) -> str:
-        return f"{self.email} ({self.role})"
-
-
-    # 🔒 Password helpers
-    def set_password(self, raw_password):
-        """Hashes and stores the password securely."""
-        self.password_hash = make_password(raw_password)
-        self.save(update_fields=["password_hash"])
-
-    def check_password(self, raw_password):
-        """Checks if a password matches the stored hash."""
-        return check_password(raw_password, self.password_hash)
-
-
+# -------------------------
+# AccessRequest Model
+# -------------------------
 def _headshot_upload_path(instance, filename):
-    """Stores uploaded headshots under access_requests/<user_id>/"""
     base, ext = os.path.splitext(filename or "")
     ext = ext if ext else ".bin"
-    return f"access_requests/{instance.user_id}/{uuid4().hex}{ext}"
+    return f"access_requests/{instance.user.id}/{uuid4().hex}{ext}"
 
 class AccessRequest(models.Model):
     STATUS_PENDING = "pending"
@@ -71,30 +95,17 @@ class AccessRequest(models.Model):
     ]
 
     id = models.UUIDField(primary_key=True, default=uuid4, editable=False)
-    # One request per user account (update in place on resubmission)
-    user = models.OneToOneField(
-        AppUser,
-        on_delete=models.CASCADE,
-        related_name="access_request",
-    )
+    user = models.OneToOneField(AppUser, on_delete=models.CASCADE, related_name="access_request")
     status = models.CharField(max_length=16, choices=STATUS_CHOICES, default=STATUS_PENDING)
-
-    # Evidence
-    headshot = models.FileField(
-        upload_to=_headshot_upload_path,
-        blank=True,
-        null=True,
-        storage=PrivateMediaStorage() if PrivateMediaStorage else None,
-    )
+    headshot = models.FileField(upload_to=_headshot_upload_path, blank=True, null=True)
     consent_at = models.DateTimeField(blank=True, null=True)
     code = models.CharField(max_length=32, blank=True, null=True)
     extra = models.JSONField(default=dict, blank=True)
 
-    # Audit
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
     verified_at = models.DateTimeField(blank=True, null=True)
-    verified_by = models.CharField(max_length=255, blank=True, null=True, help_text="Verifier identifier (e.g., email)")
+    verified_by = models.CharField(max_length=255, blank=True, null=True)
     notes = models.TextField(blank=True)
 
     class Meta:
@@ -118,13 +129,10 @@ class AccessRequest(models.Model):
             self.notes = (self.notes or "") + ("\n" if self.notes else "") + note
         self.save(update_fields=["status", "verified_at", "verified_by", "notes"]) 
 
-
+# -------------------------
+# RefreshToken Model
+# -------------------------
 class RefreshToken(models.Model):
-    """Persistent refresh token with rotation and revocation support.
-
-    The raw token is only shown to the client once and its SHA256 is stored.
-    """
-
     id = models.UUIDField(primary_key=True, default=uuid4, editable=False)
     user = models.ForeignKey(AppUser, on_delete=models.CASCADE, related_name="refresh_tokens")
     token_hash = models.CharField(max_length=128, unique=True)
@@ -132,17 +140,12 @@ class RefreshToken(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     expires_at = models.DateTimeField()
     revoked_at = models.DateTimeField(blank=True, null=True)
-    rotated_from = models.ForeignKey(
-        "self", on_delete=models.SET_NULL, null=True, blank=True, related_name="rotated_to"
-    )
+    rotated_from = models.ForeignKey("self", on_delete=models.SET_NULL, null=True, blank=True, related_name="rotated_to")
     user_agent = models.CharField(max_length=256, blank=True)
     ip_address = models.CharField(max_length=64, blank=True)
 
     class Meta:
         db_table = "refresh_token"
-        indexes = [
-            models.Index(fields=["user", "expires_at"]),
-        ]
 
     @property
     def is_active(self) -> bool:

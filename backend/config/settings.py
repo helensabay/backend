@@ -1,4 +1,5 @@
 import os
+
 from pathlib import Path
 from .settings_components import get_database, get_cors, get_jwt, get_email
 try:
@@ -18,8 +19,13 @@ if load_dotenv:
 # Core settings
 DEBUG = os.getenv("DJANGO_DEBUG", "1") in {"1", "true", "True"}
 SECRET_KEY = os.getenv("DJANGO_SECRET_KEY", "dev-insecure-secret-key")
-ALLOWED_HOSTS = os.getenv("DJANGO_ALLOWED_HOSTS", "*").split(",")
-AUTH_USER_MODEL = 'accounts.AppUser'
+ALLOWED_HOSTS = ['192.168.1.6', 'localhost', '127.0.0.1']
+CORS_ALLOWED_ORIGINS = [
+    "http://localhost:8080",
+    "http://192.168.1.6:8080",  # if frontend runs in browser
+    "http://192.168.1.6:19006", # if React Native Expo
+]
+AUTH_USER_MODEL = "accounts.AppUser"
 
 
 # Minimal apps to avoid DB usage
@@ -33,6 +39,8 @@ INSTALLED_APPS = [
     "django.contrib.messages",
     "django.contrib.staticfiles",
     "django.contrib.sites",
+        'rest_framework_simplejwt',
+
     "rest_framework",  # if you're using Django REST
     # Third-party
     "corsheaders",
@@ -44,8 +52,17 @@ INSTALLED_APPS = [
     # Local apps
     "accounts",
     "api",
-    
+
 ]
+
+AUTH_USER_MODEL = 'accounts.AppUser'
+
+REST_FRAMEWORK = {
+    'DEFAULT_AUTHENTICATION_CLASSES': (
+        'rest_framework_simplejwt.authentication.JWTAuthentication',
+    ),
+}
+
 
 # Keep middleware lightweight; omit session/auth/csrf
 MIDDLEWARE = [
@@ -148,6 +165,9 @@ except Exception:
 
 # Django Allauth config
 AUTHENTICATION_BACKENDS = (
+    'accounts.backends.EmailBackend',  # custom backend
+    'django.contrib.auth.backends.ModelBackend',  # keep default as fallback
+
     "django.contrib.auth.backends.ModelBackend",
     "allauth.account.auth_backends.AuthenticationBackend",
 )
