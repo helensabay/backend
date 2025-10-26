@@ -23,7 +23,7 @@ class PendingUserGateMiddleware:
    "/api/login/",
             "/api/accounts/register",  # <--- add this
     "/accounts/",  # allow allauth endpoints
-
+'/api/profile/'
         "/api/auth/google",
         "/api/auth/verify-email",
         "/api/auth/resend-verification",

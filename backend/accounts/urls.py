@@ -1,9 +1,15 @@
 from django.urls import path
-from .views import RegisterView, MyTokenObtainPairView
-from rest_framework_simplejwt.views import TokenRefreshView
+from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
+from .serializers import MyTokenObtainPairSerializer
+from .views import RegisterView
+from .views import MyTokenObtainPairView, ProfileView  # <-- Import from views, NOT serializers
+
+from .views import MyTokenObtainPairView
 
 urlpatterns = [
-    path('register/', RegisterView.as_view(), name='register'),
     path('login/', MyTokenObtainPairView.as_view(), name='token_obtain_pair'),
-    path('refresh-token/', TokenRefreshView.as_view(), name='token_refresh'),
+    path('token/refresh/', TokenRefreshView.as_view(), name='token_refresh'),
+    path('register/', RegisterView.as_view(), name='register'),
+    path('profile/', ProfileView.as_view(), name='profile'),
+
 ]

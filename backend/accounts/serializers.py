@@ -1,14 +1,34 @@
 from rest_framework import serializers
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 from .models import AppUser, Profile  # <-- make sure these exist in accounts/models.py
+from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
+from django.contrib.auth import get_user_model, authenticate
+from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
+from django.contrib.auth import get_user_model
+from rest_framework import serializers
+from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
+from django.contrib.auth import get_user_model, authenticate
+User = get_user_model()
 
 
-# JWT serializer
 class MyTokenObtainPairSerializer(TokenObtainPairSerializer):
-    """Custom JWT serializer; extend if you want extra claims."""
-    pass
+    email = serializers.EmailField(write_only=True)
 
+    def validate(self, attrs):
+        email = attrs.get('email')
+        password = attrs.get('password')
 
+        try:
+            user = User.objects.get(email=email)
+        except User.DoesNotExist:
+            raise serializers.ValidationError({'detail': 'Invalid credentials'})
+
+        if not user.check_password(password):
+            raise serializers.ValidationError({'detail': 'Invalid credentials'})
+
+        # Map username for SimpleJWT
+        attrs['username'] = user.username
+        return super().validate(attrs)
 # Registration serializer
 class RegisterSerializer(serializers.ModelSerializer):
     password = serializers.CharField(write_only=True)

@@ -56,10 +56,16 @@ INSTALLED_APPS = [
 ]
 REST_FRAMEWORK = {
     'DEFAULT_PERMISSION_CLASSES': (
+               'rest_framework_simplejwt.authentication.JWTAuthentication',
+
         'rest_framework.permissions.AllowAny',
     ),
 }
-AUTH_USER_MODEL = 'accounts.AppUser'
+AUTH_USER_MODEL = "accounts.AppUser"  # make sure this matches your app name
+AUTHENTICATION_BACKENDS = [
+    'accounts.backend.EmailBackend',  # custom backend first
+    'django.contrib.auth.backends.ModelBackend',
+]
 
 
 
