@@ -1,5 +1,6 @@
 from django.contrib.auth.models import AbstractBaseUser, BaseUserManager, PermissionsMixin
 from django.db import models
+from django.conf import settings
 
 class AppUserManager(BaseUserManager):
     def create_user(self, email, password=None, **extra_fields):
@@ -18,12 +19,20 @@ class AppUserManager(BaseUserManager):
 
 class AppUser(AbstractBaseUser, PermissionsMixin):
     email = models.EmailField(unique=True)
-    is_active = models.BooleanField(default=True)
-    is_staff = models.BooleanField(default=False)
-
-    objects = AppUserManager()
-
-    USERNAME_FIELD = 'email'
+    role = models.CharField(max_length=50, default="user")
+    # Add first_name and last_name if you want them
+    first_name = models.CharField(max_length=150, blank=True)
+    last_name = models.CharField(max_length=150, blank=True)
+    status = models.CharField(
+        max_length=20,
+        default="pending",  # default for new users
+        choices=(
+            ("pending", "Pending"),
+            ("active", "Active"),
+            ("deactivated", "Deactivated"),
+        ),
+    )
+    USERNAME_FIELD = "email"
     REQUIRED_FIELDS = []
 
     def __str__(self):
@@ -31,12 +40,13 @@ class AppUser(AbstractBaseUser, PermissionsMixin):
 
 class Profile(models.Model):
     ROLE_CHOICES = (
-        ('student', 'Student'),
-        ('staff', 'Staff'),
-        ('admin', 'Admin'),
+        ("admin", "Admin"),
+        ("manager", "Manager"),
+        ("staff", "Staff"),
+        ("user", "User"),
     )
-    user = models.OneToOneField(AppUser, on_delete=models.CASCADE, related_name='profile')
-    role = models.CharField(max_length=10, choices=ROLE_CHOICES)
+    user = models.OneToOneField(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
+    role = models.CharField(max_length=20, choices=ROLE_CHOICES, default="user")
 
     def __str__(self):
         return f"{self.user.email} - {self.role}"

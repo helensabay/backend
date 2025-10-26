@@ -1,31 +1,33 @@
 from rest_framework import serializers
-from .models import AppUser
-from api.models import Profile  # adjust if Profile is in accounts.models
+from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
+from .models import AppUser, Profile  # <-- make sure these exist in accounts/models.py
 
+
+# JWT serializer
+class MyTokenObtainPairSerializer(TokenObtainPairSerializer):
+    """Custom JWT serializer; extend if you want extra claims."""
+    pass
+
+
+# Registration serializer
 class RegisterSerializer(serializers.ModelSerializer):
-    first_name = serializers.CharField(required=True)
-    last_name = serializers.CharField(required=True)
     password = serializers.CharField(write_only=True)
-    role = serializers.ChoiceField(choices=Profile.ROLE_CHOICES, required=True)
 
     class Meta:
         model = AppUser
-        fields = ['first_name', 'last_name', 'email', 'password', 'role']
+        fields = ["email", "password", "first_name", "last_name", "role"]
 
     def create(self, validated_data):
-        role = validated_data.pop('role')
-        password = validated_data.pop('password')
-        first_name = validated_data.pop('first_name')
-        last_name = validated_data.pop('last_name')
-
-        # Create user
-        user = AppUser.objects.create(**validated_data)
-        user.set_password(password)
-        user.first_name = first_name
-        user.last_name = last_name
+        user = AppUser.objects.create(
+            email=validated_data["email"],
+            first_name=validated_data.get("first_name", ""),
+            last_name=validated_data.get("last_name", ""),
+            role=validated_data.get("role", "user"),
+            status="active",
+        )
+        user.set_password(validated_data["password"])
         user.save()
 
-        # Create profile
-        Profile.objects.create(user=user, role=role)
-
+        # Optional: create related Profile if your model has one
+        Profile.objects.create(user=user, role=user.role)
         return user
