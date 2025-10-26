@@ -31,6 +31,7 @@ from api.views_attendance import MyTokenObtainPairView
 urlpatterns = [
     # Health checks
         path('login/', MyTokenObtainPairView.as_view(), name='token_obtain_pair'),
+    path('api/accounts/', include('accounts.urls')),
 
     path('login/', auth_login, name='login'),
     path('api/', include('accounts.urls')),  # login endpoint will be /api/login/

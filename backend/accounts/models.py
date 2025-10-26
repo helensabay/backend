@@ -1,4 +1,4 @@
-from django.contrib.auth.models import AbstractBaseUser, PermissionsMixin, BaseUserManager
+from django.contrib.auth.models import AbstractBaseUser, BaseUserManager, PermissionsMixin
 from django.db import models
 
 class AppUserManager(BaseUserManager):
@@ -14,22 +14,29 @@ class AppUserManager(BaseUserManager):
     def create_superuser(self, email, password=None, **extra_fields):
         extra_fields.setdefault('is_staff', True)
         extra_fields.setdefault('is_superuser', True)
-        if extra_fields.get('is_staff') is not True:
-            raise ValueError('Superuser must have is_staff=True.')
-        if extra_fields.get('is_superuser') is not True:
-            raise ValueError('Superuser must have is_superuser=True.')
         return self.create_user(email, password, **extra_fields)
 
 class AppUser(AbstractBaseUser, PermissionsMixin):
     email = models.EmailField(unique=True)
-    username = models.CharField(max_length=50, blank=True)  # optional
     is_active = models.BooleanField(default=True)
     is_staff = models.BooleanField(default=False)
 
     objects = AppUserManager()
 
     USERNAME_FIELD = 'email'
-    REQUIRED_FIELDS = []  # username optional
+    REQUIRED_FIELDS = []
 
     def __str__(self):
         return self.email
+
+class Profile(models.Model):
+    ROLE_CHOICES = (
+        ('student', 'Student'),
+        ('staff', 'Staff'),
+        ('admin', 'Admin'),
+    )
+    user = models.OneToOneField(AppUser, on_delete=models.CASCADE, related_name='profile')
+    role = models.CharField(max_length=10, choices=ROLE_CHOICES)
+
+    def __str__(self):
+        return f"{self.user.email} - {self.role}"
