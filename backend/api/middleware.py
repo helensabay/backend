@@ -20,10 +20,11 @@ class PendingUserGateMiddleware:
         "/api/auth/login",
         "/api/auth/logout",
         "/api/auth/register",
-   "/api/login/",
-            "/api/accounts/register",  # <--- add this
-    "/accounts/",  # allow allauth endpoints
-'/api/profile/'
+        "/api/login/",
+        "/api/accounts/register",  # <--- add this
+        "/accounts/",  # allow allauth endpoints
+        "/api/profile/",
+        "/api/menu-items/", 
         "/api/auth/google",
         "/api/auth/verify-email",
         "/api/auth/resend-verification",

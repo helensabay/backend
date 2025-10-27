@@ -13,9 +13,9 @@ urlpatterns = [
     path("", RedirectView.as_view(url="/api/health/", permanent=False), name="root"),
     path("admin/", admin.site.urls),
     path("api/", include("api.urls")),
-       path('register/', RegisterView.as_view(), name='register'),
- 
-     path('api/accounts/', include('accounts.urls')),
+    path('register/', RegisterView.as_view(), name='register'),
+    path('menu/', include('menu.urls')),  # <--- This handles all /menu/* endpoints
+    path('api/accounts/', include('accounts.urls')),
     path("accounts/", include("allauth.urls")),
 ]
 

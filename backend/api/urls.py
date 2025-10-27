@@ -22,17 +22,23 @@ from . import (
     views_catering as catering_views,
     views_dashboard as dashboard_views,
 
+
 )
+from django.conf.urls.static import static
+
+from django.conf import settings
+
 from django.urls import path
 from .views_auth import auth_login
 from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
 from api.views_attendance import MyTokenObtainPairView
+# Serve media files in development
 
 urlpatterns = [
+    path('menu/', include('menu.urls')),  # <-- this will handle everything under menu/
     # Health checks
         path('login/', MyTokenObtainPairView.as_view(), name='token_obtain_pair'),
     path('api/accounts/', include('accounts.urls')),
-
     path('login/', auth_login, name='login'),
     path('api/', include('accounts.urls')),  # login endpoint will be /api/login/
     path('', include('accounts.urls')),
@@ -197,3 +203,5 @@ urlpatterns = [
     path("diagnostics/receipt", diag_views.diag_receipt, name="diag_receipt"),
     path("diagnostics/cash-drawer", diag_views.diag_cash_drawer, name="diag_cash_drawer"),
 ]
+if settings.DEBUG:
+    urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)

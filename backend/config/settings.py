@@ -52,15 +52,24 @@ INSTALLED_APPS = [
     # Local apps
     "accounts",
     "api",
+        'menu',  # ✅ Add this line
+
 
 ]
 REST_FRAMEWORK = {
+    'DEFAULT_AUTHENTICATION_CLASSES': (
+        'rest_framework_simplejwt.authentication.JWTAuthentication',
+    ),
     'DEFAULT_PERMISSION_CLASSES': (
-               'rest_framework_simplejwt.authentication.JWTAuthentication',
-
         'rest_framework.permissions.AllowAny',
     ),
 }
+# Media files (for MenuItem images)
+MEDIA_URL = '/media/'
+MEDIA_ROOT = BASE_DIR / 'media'
+
+# Optional: If your frontend is on a different port/domain
+
 AUTH_USER_MODEL = "accounts.AppUser"  # make sure this matches your app name
 AUTHENTICATION_BACKENDS = [
     'accounts.backend.EmailBackend',  # custom backend first
