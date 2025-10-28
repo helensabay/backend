@@ -16,6 +16,7 @@ class PendingUserGateMiddleware:
     """
 
     PUBLIC_PATHS = {
+        'api/notifications/',
         "/api/feedback",
         '/api/v1/accounts/register/'
         "/api/health",

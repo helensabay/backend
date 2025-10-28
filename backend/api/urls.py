@@ -37,7 +37,8 @@ from .views_feedback import FeedbackCreateView
 
 
 urlpatterns = [
-        path('feedback/', FeedbackCreateView.as_view(), name='feedback-create'),
+    path('api/notifications/', include('notifications.urls')),  # final endpoint: /api/notifications/
+    path('feedback/', FeedbackCreateView.as_view(), name='feedback-create'),
     path('feedback/', FeedbackCreateView.as_view(), name='feedback-create'),
 
     path('menu/', include('menu.urls')),  # <-- this will handle everything under menu/

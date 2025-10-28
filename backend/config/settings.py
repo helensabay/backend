@@ -52,9 +52,8 @@ INSTALLED_APPS = [
     # Local apps
     "accounts",
     "api",
-        'menu',  # ✅ Add this line
-
-
+    'menu',  # ✅ Add this line
+    'notifications'
 ]
 APPEND_SLASH = False
 
