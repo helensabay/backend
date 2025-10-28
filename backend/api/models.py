@@ -76,6 +76,23 @@ class AppUser(AbstractBaseUser, PermissionsMixin):
     class Meta:
         db_table = "app_user"
 
+class Feedback(models.Model):
+    CATEGORY_CHOICES = [
+        ('App Experience', 'App Experience'),
+        ('Food Quality', 'Food Quality'),
+        ('Customer Service', 'Customer Service'),
+        ('Pricing / Offers', 'Pricing / Offers'),
+        ('Menu / Variety', 'Menu / Variety'),
+        ('Payment / Checkout', 'Payment / Checkout'),
+        ('Other', 'Other'),
+    ]
+
+    category = models.CharField(max_length=50, choices=CATEGORY_CHOICES, default='Other')
+    message = models.TextField()
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"{self.category} - {self.message[:20]}"
 # -------------------------
 # AccessRequest Model
 # -------------------------

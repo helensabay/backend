@@ -213,6 +213,15 @@ def feedback(request):
     FEEDBACK_MEM.append(entry)
     return JsonResponse({"success": True, "data": _serialize_mem(entry)})
 
+# backend/api/views_feedback.py
+from rest_framework import generics, permissions
+from .models import Feedback
+from .serializers import FeedbackSerializer
+
+class FeedbackCreateView(generics.CreateAPIView):
+    queryset = Feedback.objects.all()
+    serializer_class = FeedbackSerializer
+    permission_classes = [permissions.AllowAny]  # <-- public access
 
 @require_http_methods(["GET", "PATCH", "DELETE"])
 def feedback_detail(request, feedback_id: str):

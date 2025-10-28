@@ -16,6 +16,8 @@ class PendingUserGateMiddleware:
     """
 
     PUBLIC_PATHS = {
+        "/api/feedback",
+        '/api/v1/accounts/register/'
         "/api/health",
         "/api/auth/login",
         "/api/auth/logout",

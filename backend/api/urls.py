@@ -33,8 +33,13 @@ from .views_auth import auth_login
 from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
 from api.views_attendance import MyTokenObtainPairView
 # Serve media files in development
+from .views_feedback import FeedbackCreateView
+
 
 urlpatterns = [
+        path('feedback/', FeedbackCreateView.as_view(), name='feedback-create'),
+    path('feedback/', FeedbackCreateView.as_view(), name='feedback-create'),
+
     path('menu/', include('menu.urls')),  # <-- this will handle everything under menu/
     # Health checks
         path('login/', MyTokenObtainPairView.as_view(), name='token_obtain_pair'),
